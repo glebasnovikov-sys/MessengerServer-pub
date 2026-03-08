@@ -5,22 +5,25 @@ using MessengerServer.Hubs;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
+
+// Railway даёт DATABASE_URL, локально берём из appsettings.json
+var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
+    ?? builder.Configuration.GetConnectionString("Default");
+
 builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+    opt.UseNpgsql(connectionString));
 
 builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
     p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
 var app = builder.Build();
 
-// Применяем миграции при старте
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
 }
 
-// Создаём wwwroot и папку avatars если не существуют
 var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
 Directory.CreateDirectory(Path.Combine(wwwroot, "avatars"));
 
