@@ -49,9 +49,7 @@ app.UseStaticFiles(new StaticFileOptions
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
 
-var urls = app.Urls.Count > 0 ? string.Join(", ", app.Urls) : "http://localhost:5000";
-Console.WriteLine($"\n✅ Сервер запущен: {urls}");
-Console.WriteLine("📱 Для телефона в той же WiFi используй IP своего ПК\n");
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+Console.WriteLine($"🚀 Запускаемся на порту: {port}");
 app.Run($"http://0.0.0.0:{port}");
