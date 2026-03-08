@@ -53,4 +53,5 @@ var urls = app.Urls.Count > 0 ? string.Join(", ", app.Urls) : "http://localhost:
 Console.WriteLine($"\n✅ Сервер запущен: {urls}");
 Console.WriteLine("📱 Для телефона в той же WiFi используй IP своего ПК\n");
 
-app.Run("http://0.0.0.0:5000");
+var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+app.Run($"http://0.0.0.0:{port}");
