@@ -1,0 +1,5 @@
+﻿bin/
+obj/
+*.db
+wwwroot/avatars/
+appsettings*.json
