@@ -6,9 +6,21 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 
-// Railway даёт DATABASE_URL, локально берём из appsettings.json
-var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
-    ?? builder.Configuration.GetConnectionString("Default");
+// Railway даёт DATABASE_URL в формате postgresql://user:pass@host:port/db
+// Npgsql нужен формат Host=...;Database=...
+var rawUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+string? connectionString;
+
+if (!string.IsNullOrEmpty(rawUrl))
+{
+    var uri = new Uri(rawUrl);
+    var userInfo = uri.UserInfo.Split(':');
+    connectionString = $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+}
+else
+{
+    connectionString = builder.Configuration.GetConnectionString("Default");
+}
 
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseNpgsql(connectionString));
