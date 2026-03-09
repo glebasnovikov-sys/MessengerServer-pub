@@ -31,12 +31,18 @@ public class MessagesController : ControllerBase
             .OrderBy(m => m.SentAt)
             .ToListAsync();
 
-        // Пометить входящие как прочитанные
         var unread = msgs.Where(m => m.ReceiverId == userId && !m.IsRead).ToList();
         if (unread.Count > 0)
         {
             unread.ForEach(m => m.IsRead = true);
             await _db.SaveChangesAsync();
+
+            // Уведомляем отправителя что его сообщения прочитаны
+            foreach (var m in unread)
+            {
+                await _hub.Clients.Group($"user_{m.SenderId}")
+                    .SendAsync("MessageRead", m.Id);
+            }
         }
 
         return Ok(msgs);
