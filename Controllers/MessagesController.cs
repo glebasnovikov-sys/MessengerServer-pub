@@ -48,6 +48,28 @@ public class MessagesController : ControllerBase
         return Ok(msgs);
     }
 
+    [HttpPost("read/{userId}/{otherId}")]
+    public async Task<IActionResult> MarkRead(int userId, int otherId)
+    {
+        var unread = await _db.Messages
+            .Where(m => m.SenderId == otherId && m.ReceiverId == userId && !m.IsRead)
+            .ToListAsync();
+
+        if (unread.Count > 0)
+        {
+            unread.ForEach(m => m.IsRead = true);
+            await _db.SaveChangesAsync();
+
+            foreach (var m in unread)
+            {
+                await _hub.Clients.Group($"user_{m.SenderId}")
+                    .SendAsync("MessageRead", m.Id);
+            }
+        }
+
+        return Ok();
+    }
+
     // Новые входящие сообщения после lastId
     [HttpGet("new/{userId}/{otherId}/{lastId}")]
     public async Task<IActionResult> GetNewIncoming(int userId, int otherId, int lastId)
