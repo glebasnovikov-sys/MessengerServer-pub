@@ -8,18 +8,22 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 
-// ✅ Строка подключения — из переменной окружения Railway или из appsettings.json
-var connectionString =
-    Environment.GetEnvironmentVariable("DATABASE_URL") // Railway даёт в формате postgres://...
+// ✅ Строка подключения из переменной окружения Railway
+var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
     ?? builder.Configuration.GetConnectionString("Default");
 
-// Railway даёт DATABASE_URL в формате postgres://user:pass@host:port/db
-// Npgsql понимает только Host=...;Port=... формат — конвертируем
-if (connectionString != null && connectionString.StartsWith("postgres://"))
+// Конвертируем postgres:// или postgresql:// в формат Npgsql
+if (connectionString != null &&
+    (connectionString.StartsWith("postgres://") ||
+     connectionString.StartsWith("postgresql://")))
 {
     var uri = new Uri(connectionString);
     var userInfo = uri.UserInfo.Split(':');
-    connectionString = $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+    var user = Uri.UnescapeDataString(userInfo[0]);
+    var pass = Uri.UnescapeDataString(userInfo[1]);
+    var db = uri.AbsolutePath.TrimStart('/');
+    connectionString = $"Host={uri.Host};Port={uri.Port};Database={db};Username={user};Password={pass};SSL Mode=Require;Trust Server Certificate=true";
+    Console.WriteLine($"✅ Строка подключения сконвертирована для {uri.Host}");
 }
 
 builder.Services.AddDbContext<AppDbContext>(opt =>
@@ -30,7 +34,7 @@ builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
 
 var app = builder.Build();
 
-// ✅ Инициализация Firebase — ключ из переменной окружения
+// ✅ Firebase из переменной окружения
 var firebaseJson = Environment.GetEnvironmentVariable("FIREBASE_KEY_JSON");
 if (!string.IsNullOrEmpty(firebaseJson))
 {
@@ -42,7 +46,6 @@ if (!string.IsNullOrEmpty(firebaseJson))
 }
 else
 {
-    // Локальная разработка — из файла
     var firebaseKeyPath = Path.Combine(AppContext.BaseDirectory, "firebase-key.json");
     if (!File.Exists(firebaseKeyPath))
         firebaseKeyPath = Path.Combine(Directory.GetCurrentDirectory(), "firebase-key.json");
@@ -57,7 +60,7 @@ else
     }
     else
     {
-        Console.WriteLine("⚠️ firebase-key.json не найден и FIREBASE_KEY_JSON не задан");
+        Console.WriteLine("⚠️ Firebase не инициализирован");
     }
 }
 
@@ -82,7 +85,6 @@ app.UseStaticFiles(new StaticFileOptions
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
 
-// ✅ Порт из переменной окружения Railway
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 Console.WriteLine($"🚀 Сервер запущен на порту {port}");
 app.Run($"http://0.0.0.0:{port}");
