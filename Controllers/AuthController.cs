@@ -11,7 +11,6 @@ namespace MessengerServer.Controllers;
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
-
     private readonly AppDbContext _db;
 
     public AuthController(AppDbContext db) => _db = db;
@@ -43,7 +42,6 @@ public class AuthController : ControllerBase
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
-
         return Ok(ToDto(user));
     }
 
@@ -52,8 +50,10 @@ public class AuthController : ControllerBase
     {
         var clean = req.Tag.TrimStart('@').ToLowerInvariant();
         var hash = HashPassword(req.Password);
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Tag == clean && u.PasswordHash == hash);
-        if (user == null) return Unauthorized(new { error = "Неверный тег или пароль" });
+        var user = await _db.Users.FirstOrDefaultAsync(
+            u => u.Tag == clean && u.PasswordHash == hash);
+        if (user == null)
+            return Unauthorized(new { error = "Неверный тег или пароль" });
         return Ok(ToDto(user));
     }
 
@@ -93,26 +93,38 @@ public class AuthController : ControllerBase
         var user = await _db.Users.FindAsync(userId);
         if (user == null) return NotFound();
 
-        var baseDir = AppContext.BaseDirectory;
-        var uploadsDir = Path.Combine(baseDir, "wwwroot", "avatars");
+        var uploadsDir = Path.Combine(AppContext.BaseDirectory, "wwwroot", "avatars");
         Directory.CreateDirectory(uploadsDir);
 
         var fileName = $"{userId}.jpg";
         var filePath = Path.Combine(uploadsDir, fileName);
 
-        // Логируем куда сохраняем
-        Console.WriteLine($"[AVATAR] Saving to: {filePath}");
-        Console.WriteLine($"[AVATAR] BaseDir: {baseDir}");
-
         using var stream = System.IO.File.OpenWrite(filePath);
         await file.CopyToAsync(stream);
 
-        Console.WriteLine($"[AVATAR] File exists after save: {System.IO.File.Exists(filePath)}");
-
         user.AvatarColor = $"/avatars/{fileName}";
         await _db.SaveChangesAsync();
-
         return Ok(ToDto(user));
+    }
+
+    [HttpPost("fcm-token")]
+    public async Task<IActionResult> SaveFcmToken([FromBody] FcmTokenRequest req)
+    {
+        Console.WriteLine($"[FCM-SERVER] Получен токен для userId={req.UserId}");
+        Console.WriteLine($"[FCM-SERVER] Токен: {req.Token?[..Math.Min(20, req.Token?.Length ?? 0)]}...");
+
+        var user = await _db.Users.FindAsync(req.UserId);
+        if (user == null)
+        {
+            Console.WriteLine($"[FCM-SERVER] ❌ Пользователь {req.UserId} не найден!");
+            return NotFound();
+        }
+
+        user.FcmToken = req.Token;
+        await _db.SaveChangesAsync();
+
+        Console.WriteLine($"[FCM-SERVER] ✅ Токен сохранён для {user.DisplayName} (id={user.Id})");
+        return Ok();
     }
 
     private static UserDto ToDto(User u) => new()

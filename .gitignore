@@ -1,5 +1,22 @@
-﻿bin/
+﻿## .NET
+bin/
 obj/
-*.db
+*.user
+*.suo
+.vs/
+
+## Секретные файлы — НЕ заливать на GitHub!
+firebase-key.json
+appsettings.Development.json
+
+## Локальные настройки
+Properties/launchSettings.json
+
+## Загруженные файлы
 wwwroot/avatars/
-appsettings*.json
+wwwroot/audio/
+wwwroot/video/
+
+## Архивы
+*.rar
+*.zip

@@ -10,15 +10,20 @@ public class User
     [Required] public string PasswordHash { get; set; } = string.Empty;
     public string? Bio { get; set; }
     public string? AvatarColor { get; set; }
+    public string? FcmToken { get; set; }  // ← НОВОЕ
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+// Models.cs
 public class Message
 {
     public int Id { get; set; }
     public int SenderId { get; set; }
     public int ReceiverId { get; set; }
     [Required] public string Text { get; set; } = string.Empty;
+    public string? AudioUrl { get; set; }
+    public string? VideoUrl { get; set; }  // ← НОВОЕ
+    public string MessageType { get; set; } = "text"; // "text" | "audio" | "video"
     public DateTime SentAt { get; set; } = DateTime.UtcNow;
     public bool IsRead { get; set; } = false;
 }
@@ -59,4 +64,10 @@ public class UpdateProfileRequest
     public int UserId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public string? Bio { get; set; }
+}
+
+public class FcmTokenRequest
+{
+    public int UserId { get; set; }
+    public string Token { get; set; } = string.Empty;
 }
