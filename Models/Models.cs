@@ -14,6 +14,14 @@ public class User
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+public class DeletedChat
+{
+    public int Id { get; set; }
+    public int UserId { get; set; }
+    public int PeerId { get; set; }
+    public DateTime DeletedAt { get; set; }
+}
+
 // Models.cs
 public class Message
 {

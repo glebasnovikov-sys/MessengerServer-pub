@@ -27,10 +27,18 @@ public class MessagesController : ControllerBase
         [FromQuery] int beforeId = 0,
         [FromQuery] int take = 30)
     {
+        // Проверяем дату удаления чата
+        var deletedChat = await _db.DeletedChats
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.PeerId == otherId);
+
         var query = _db.Messages
             .Where(m =>
                 (m.SenderId == userId && m.ReceiverId == otherId) ||
                 (m.SenderId == otherId && m.ReceiverId == userId));
+
+        // Скрываем сообщения до даты удаления
+        if (deletedChat != null)
+            query = query.Where(m => m.SentAt > deletedChat.DeletedAt);
 
         List<Message> msgs;
         bool hasMore;
@@ -63,6 +71,7 @@ public class MessagesController : ControllerBase
 
         return Ok(new { messages = msgs, hasMore });
     }
+  
 
     // ─── Пометить прочитанными ───────────────────────────────────────────────
     [HttpPost("read/{userId}/{otherId}")]
@@ -109,6 +118,11 @@ public class MessagesController : ControllerBase
     [HttpGet("chats/{userId}")]
     public async Task<IActionResult> GetChats(int userId)
     {
+        // Загружаем записи об удалённых чатах
+        var deletedChats = await _db.DeletedChats
+            .Where(d => d.UserId == userId)
+            .ToDictionaryAsync(d => d.PeerId, d => d.DeletedAt);
+
         var allMsgs = await _db.Messages
             .Where(m => m.SenderId == userId || m.ReceiverId == userId)
             .OrderByDescending(m => m.SentAt)
@@ -124,13 +138,19 @@ public class MessagesController : ControllerBase
 
             if (!seen.Add(otherId)) continue;
 
+            // Скрываем чат если удалён и новых сообщений после удаления нет
+            if (deletedChats.TryGetValue(otherId, out var deletedAt)
+                && msg.SentAt <= deletedAt)
+                continue;
+
             var other = await _db.Users.FindAsync(otherId);
             if (other == null) continue;
 
             var unread = allMsgs.Count(m =>
                 m.SenderId == otherId
              && m.ReceiverId == userId
-             && !m.IsRead);
+             && !m.IsRead
+             && (!deletedChats.ContainsKey(otherId) || m.SentAt > deletedChats[otherId]));
 
             previews.Add(new
             {
@@ -227,6 +247,28 @@ public class MessagesController : ControllerBase
             Console.WriteLine($"[FCM] Пропуск пуша: receiver.FcmToken={receiver?.FcmToken ?? "NULL"}");
 
         return Ok(msg);
+    }
+
+    // ─── Удалить чат ─────────────────────────────────────────────────────────
+    [HttpPost("delete/{userId}/{peerId}")]
+    public async Task<IActionResult> DeleteChat(int userId, int peerId)
+    {
+        // Удаляем старую запись если есть
+        var existing = await _db.DeletedChats
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.PeerId == peerId);
+
+        if (existing != null)
+            existing.DeletedAt = DateTime.UtcNow;
+        else
+            _db.DeletedChats.Add(new DeletedChat
+            {
+                UserId = userId,
+                PeerId = peerId,
+                DeletedAt = DateTime.UtcNow
+            });
+
+        await _db.SaveChangesAsync();
+        return Ok();
     }
 
     // ─── Отправить видео ─────────────────────────────────────────────────────
