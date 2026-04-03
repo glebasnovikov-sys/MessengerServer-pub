@@ -137,6 +137,14 @@ public class AuthController : ControllerBase
         return Ok();
     }
 
+    [HttpGet("status/{userId}")]
+    public async Task<IActionResult> GetStatus(int userId)
+    {
+        var user = await _db.Users.FindAsync(userId);
+        if (user == null) return NotFound();
+        return Ok(new { lastSeen = user.LastSeen });
+    }
+
     private static UserDto ToDto(User u) => new()
     {
         Id = u.Id,

@@ -10,7 +10,8 @@ public class User
     [Required] public string PasswordHash { get; set; } = string.Empty;
     public string? Bio { get; set; }
     public string? AvatarColor { get; set; }
-    public string? FcmToken { get; set; }  // ← НОВОЕ
+    public string? FcmToken { get; set; }
+    public DateTime LastSeen { get; set; } = DateTime.UtcNow; // ← новое
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
