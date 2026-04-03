@@ -143,10 +143,9 @@ public class AuthController : ControllerBase
         var user = await _db.Users.FindAsync(userId);
         if (user == null) return NotFound();
 
-        // ✅ Возвращаем и IsOnline и LastSeen
         return Ok(new
         {
-            lastSeen = user.LastSeen,
+            lastSeen = DateTime.SpecifyKind(user.LastSeen, DateTimeKind.Utc),
             isOnline = user.IsOnline
         });
     }
