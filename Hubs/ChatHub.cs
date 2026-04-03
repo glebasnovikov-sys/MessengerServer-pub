@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using MessengerServer.Data;
+using System.Collections.Concurrent;
 
 namespace MessengerServer.Hubs;
 
