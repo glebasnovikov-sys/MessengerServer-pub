@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using MessengerServer.Data;
 
 namespace MessengerServer.Hubs;
@@ -6,11 +7,16 @@ namespace MessengerServer.Hubs;
 public class ChatHub : Hub
 {
     private readonly AppDbContext _db;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int>
         _connections = new();
 
-    public ChatHub(AppDbContext db) => _db = db;
+    public ChatHub(AppDbContext db, IServiceScopeFactory scopeFactory)
+    {
+        _db = db;
+        _scopeFactory = scopeFactory;
+    }
 
     public async Task JoinUser(int userId)
     {
@@ -21,12 +27,10 @@ public class ChatHub : Hub
         if (user != null)
         {
             user.LastSeen = DateTime.UtcNow;
-            // ✅ Явно помечаем онлайн
             user.IsOnline = true;
             await _db.SaveChangesAsync();
         }
 
-        // ✅ Шлём только если это первое подключение этого юзера
         var count = _connections.Values.Count(v => v == userId);
         if (count == 1)
             await Clients.Others.SendAsync("UserOnline", userId);
@@ -55,43 +59,40 @@ public class ChatHub : Hub
         user.LastSeen = DateTime.UtcNow;
         user.IsOnline = true;
         await _db.SaveChangesAsync();
-        // ✅ НЕ рассылаем UserOnline спам — статус читается через GetStatus
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         if (_connections.TryRemove(Context.ConnectionId, out var userId))
         {
-            // ✅ Проверяем есть ли ещё подключения этого юзера
             var stillConnected = _connections.Values.Any(v => v == userId);
 
             if (!stillConnected)
             {
-                // ✅ Задержка 3 секунды — даём реконнекту подняться
+                // Захватываем клиентов ДО входа в фоновый Task
+                var clients = Clients;
+
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(3000);
 
                     // Перепроверяем после задержки
                     var stillOnline = _connections.Values.Any(v => v == userId);
-                    if (stillOnline) return; // реконнектнулся — не трогаем
+                    if (stillOnline) return;
 
-                    // ✅ Явно помечаем оффлайн в БД
-                    using var scope = _db.Database.GetDbConnection()
-                        .CreateCommand().Connection is not null
-                        ? null
-                        : null; // не используем scope — используем новый контекст
+                    // ✅ Новый scope — свой DbContext, не disposed
+                    using var scope = _scopeFactory.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-                    // Обновляем через прямой SQL чтобы не держать контекст
                     try
                     {
-                        await _db.Users
+                        await db.Users
                             .Where(u => u.Id == userId)
                             .ExecuteUpdateAsync(s => s
                                 .SetProperty(u => u.IsOnline, false)
                                 .SetProperty(u => u.LastSeen, DateTime.UtcNow));
 
-                        await Clients.Others.SendAsync("UserOffline", userId);
+                        await clients.Others.SendAsync("UserOffline", userId);
                     }
                     catch (Exception ex)
                     {
@@ -100,6 +101,7 @@ public class ChatHub : Hub
                 });
             }
         }
+
         await base.OnDisconnectedAsync(exception);
     }
 }
