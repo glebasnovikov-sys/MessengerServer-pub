@@ -8,14 +8,14 @@ public class ChatHub : Hub
 {
     private readonly AppDbContext _db;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IHubContext<ChatHub> _hubContext;
 
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int>
-        _connections = new();
-
-    public ChatHub(AppDbContext db, IServiceScopeFactory scopeFactory)
+    public ChatHub(AppDbContext db, IServiceScopeFactory scopeFactory,
+                   IHubContext<ChatHub> hubContext)
     {
         _db = db;
         _scopeFactory = scopeFactory;
+        _hubContext = hubContext;
     }
 
     public async Task JoinUser(int userId)
@@ -69,18 +69,15 @@ public class ChatHub : Hub
 
             if (!stillConnected)
             {
-                // Захватываем клиентов ДО входа в фоновый Task
-                var clients = Clients;
+                var hubContext = _hubContext; // захватываем до Task
 
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(3000);
 
-                    // Перепроверяем после задержки
                     var stillOnline = _connections.Values.Any(v => v == userId);
                     if (stillOnline) return;
 
-                    // ✅ Новый scope — свой DbContext, не disposed
                     using var scope = _scopeFactory.CreateScope();
                     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
@@ -92,7 +89,8 @@ public class ChatHub : Hub
                                 .SetProperty(u => u.IsOnline, false)
                                 .SetProperty(u => u.LastSeen, DateTime.UtcNow));
 
-                        await clients.Others.SendAsync("UserOffline", userId);
+                        // ✅ IHubContext работает вне контекста хаба
+                        await hubContext.Clients.All.SendAsync("UserOffline", userId);
                     }
                     catch (Exception ex)
                     {
