@@ -96,7 +96,17 @@ public class AuthController : ControllerBase
         var uploadsDir = Path.Combine(AppContext.BaseDirectory, "wwwroot", "avatars");
         Directory.CreateDirectory(uploadsDir);
 
-        var fileName = $"{userId}.jpg";
+        // Удаляем старый файл
+        if (!string.IsNullOrEmpty(user.AvatarColor))
+        {
+            var oldFileName = Path.GetFileName(user.AvatarColor.Split('?')[0]);
+            var oldPath = Path.Combine(uploadsDir, oldFileName);
+            if (System.IO.File.Exists(oldPath))
+                System.IO.File.Delete(oldPath);
+        }
+
+        var ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var fileName = $"{userId}_{ts}.jpg";
         var filePath = Path.Combine(uploadsDir, fileName);
 
         using var stream = System.IO.File.OpenWrite(filePath);
