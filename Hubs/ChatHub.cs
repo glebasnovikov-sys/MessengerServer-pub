@@ -6,8 +6,11 @@ namespace MessengerServer.Hubs;
 public class ChatHub : Hub
 {
     private readonly AppDbContext _db;
+
+    // ✅ ConcurrentDictionary — потокобезопасен
     // connectionId → userId
-    private static readonly Dictionary<string, int> _connections = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int>
+        _connections = new();
 
     public ChatHub(AppDbContext db) => _db = db;
 
@@ -16,7 +19,6 @@ public class ChatHub : Hub
         _connections[Context.ConnectionId] = userId;
         await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userId}");
 
-        // Обновляем LastSeen и рассылаем онлайн-статус
         var user = await _db.Users.FindAsync(userId);
         if (user != null)
         {
@@ -24,10 +26,13 @@ public class ChatHub : Hub
             await _db.SaveChangesAsync();
         }
 
-        await Clients.Others.SendAsync("UserOnline", userId);
+        // ✅ Шлём UserOnline только если это ПЕРВОЕ подключение этого юзера
+        // (не дубликат от реконнекта)
+        var connectionsForUser = _connections.Values.Count(v => v == userId);
+        if (connectionsForUser == 1)
+            await Clients.Others.SendAsync("UserOnline", userId);
     }
 
-    // Клиент вызывает когда пользователь начинает печатать
     public async Task StartTyping(int toUserId)
     {
         if (!_connections.TryGetValue(Context.ConnectionId, out var fromUserId))
@@ -36,7 +41,6 @@ public class ChatHub : Hub
             .SendAsync("UserTyping", fromUserId);
     }
 
-    // Клиент вызывает когда перестал печатать
     public async Task StopTyping(int toUserId)
     {
         if (!_connections.TryGetValue(Context.ConnectionId, out var fromUserId))
@@ -45,23 +49,21 @@ public class ChatHub : Hub
             .SendAsync("UserStoppedTyping", fromUserId);
     }
 
-    // Пинг — обновляет LastSeen (клиент шлёт каждые 30с)
+    // ✅ Пинг — только обновляет LastSeen, НЕ рассылает UserOnline спам
     public async Task Ping(int userId)
     {
         var user = await _db.Users.FindAsync(userId);
         if (user == null) return;
         user.LastSeen = DateTime.UtcNow;
         await _db.SaveChangesAsync();
-        await Clients.Others.SendAsync("UserOnline", userId);
+        // ✅ Убрали Clients.Others.SendAsync("UserOnline") отсюда —
+        // статус онлайн определяется через LastSeen на клиенте
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        if (_connections.TryGetValue(Context.ConnectionId, out var userId))
+        if (_connections.TryRemove(Context.ConnectionId, out var userId))
         {
-            _connections.Remove(Context.ConnectionId);
-
-            // Обновляем LastSeen при отключении
             var user = await _db.Users.FindAsync(userId);
             if (user != null)
             {
@@ -69,7 +71,23 @@ public class ChatHub : Hub
                 await _db.SaveChangesAsync();
             }
 
-            await Clients.Others.SendAsync("UserOffline", userId);
+            // ✅ Шлём UserOffline только если у юзера НЕТ других активных подключений
+            // (защита от false-offline при реконнекте)
+            var stillConnected = _connections.Values.Any(v => v == userId);
+            if (!stillConnected)
+            {
+                // ✅ Небольшая задержка — даём время реконнекту подняться
+                // прежде чем объявлять оффлайн
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(3000); // 3 секунды
+                    var stillOnline = _connections.Values.Any(v => v == userId);
+                    if (!stillOnline)
+                    {
+                        await Clients.Others.SendAsync("UserOffline", userId);
+                    }
+                });
+            }
         }
         await base.OnDisconnectedAsync(exception);
     }
