@@ -10,6 +10,8 @@ public class ChatHub : Hub
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHubContext<ChatHub> _hubContext;
 
+    private static readonly ConcurrentDictionary<string, int> _connections = new();
+
     public ChatHub(AppDbContext db, IServiceScopeFactory scopeFactory,
                    IHubContext<ChatHub> hubContext)
     {
