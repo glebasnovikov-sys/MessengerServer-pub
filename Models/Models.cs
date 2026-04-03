@@ -11,7 +11,9 @@ public class User
     public string? Bio { get; set; }
     public string? AvatarColor { get; set; }
     public string? FcmToken { get; set; }
-    public DateTime LastSeen { get; set; } = DateTime.UtcNow; // ← новое
+    public DateTime LastSeen { get; set; } = DateTime.UtcNow;
+    // ✅ НОВОЕ
+    public bool IsOnline { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 

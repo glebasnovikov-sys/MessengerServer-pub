@@ -142,7 +142,13 @@ public class AuthController : ControllerBase
     {
         var user = await _db.Users.FindAsync(userId);
         if (user == null) return NotFound();
-        return Ok(new { lastSeen = user.LastSeen });
+
+        // ✅ Возвращаем и IsOnline и LastSeen
+        return Ok(new
+        {
+            lastSeen = user.LastSeen,
+            isOnline = user.IsOnline
+        });
     }
 
     private static UserDto ToDto(User u) => new()

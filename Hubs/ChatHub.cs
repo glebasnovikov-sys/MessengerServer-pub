@@ -7,8 +7,6 @@ public class ChatHub : Hub
 {
     private readonly AppDbContext _db;
 
-    // ✅ ConcurrentDictionary — потокобезопасен
-    // connectionId → userId
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int>
         _connections = new();
 
@@ -23,13 +21,14 @@ public class ChatHub : Hub
         if (user != null)
         {
             user.LastSeen = DateTime.UtcNow;
+            // ✅ Явно помечаем онлайн
+            user.IsOnline = true;
             await _db.SaveChangesAsync();
         }
 
-        // ✅ Шлём UserOnline только если это ПЕРВОЕ подключение этого юзера
-        // (не дубликат от реконнекта)
-        var connectionsForUser = _connections.Values.Count(v => v == userId);
-        if (connectionsForUser == 1)
+        // ✅ Шлём только если это первое подключение этого юзера
+        var count = _connections.Values.Count(v => v == userId);
+        if (count == 1)
             await Clients.Others.SendAsync("UserOnline", userId);
     }
 
@@ -49,42 +48,54 @@ public class ChatHub : Hub
             .SendAsync("UserStoppedTyping", fromUserId);
     }
 
-    // ✅ Пинг — только обновляет LastSeen, НЕ рассылает UserOnline спам
     public async Task Ping(int userId)
     {
         var user = await _db.Users.FindAsync(userId);
         if (user == null) return;
         user.LastSeen = DateTime.UtcNow;
+        user.IsOnline = true;
         await _db.SaveChangesAsync();
-        // ✅ Убрали Clients.Others.SendAsync("UserOnline") отсюда —
-        // статус онлайн определяется через LastSeen на клиенте
+        // ✅ НЕ рассылаем UserOnline спам — статус читается через GetStatus
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         if (_connections.TryRemove(Context.ConnectionId, out var userId))
         {
-            var user = await _db.Users.FindAsync(userId);
-            if (user != null)
-            {
-                user.LastSeen = DateTime.UtcNow;
-                await _db.SaveChangesAsync();
-            }
-
-            // ✅ Шлём UserOffline только если у юзера НЕТ других активных подключений
-            // (защита от false-offline при реконнекте)
+            // ✅ Проверяем есть ли ещё подключения этого юзера
             var stillConnected = _connections.Values.Any(v => v == userId);
+
             if (!stillConnected)
             {
-                // ✅ Небольшая задержка — даём время реконнекту подняться
-                // прежде чем объявлять оффлайн
+                // ✅ Задержка 3 секунды — даём реконнекту подняться
                 _ = Task.Run(async () =>
                 {
-                    await Task.Delay(3000); // 3 секунды
+                    await Task.Delay(3000);
+
+                    // Перепроверяем после задержки
                     var stillOnline = _connections.Values.Any(v => v == userId);
-                    if (!stillOnline)
+                    if (stillOnline) return; // реконнектнулся — не трогаем
+
+                    // ✅ Явно помечаем оффлайн в БД
+                    using var scope = _db.Database.GetDbConnection()
+                        .CreateCommand().Connection is not null
+                        ? null
+                        : null; // не используем scope — используем новый контекст
+
+                    // Обновляем через прямой SQL чтобы не держать контекст
+                    try
                     {
+                        await _db.Users
+                            .Where(u => u.Id == userId)
+                            .ExecuteUpdateAsync(s => s
+                                .SetProperty(u => u.IsOnline, false)
+                                .SetProperty(u => u.LastSeen, DateTime.UtcNow));
+
                         await Clients.Others.SendAsync("UserOffline", userId);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Hub] Offline update error: {ex.Message}");
                     }
                 });
             }
