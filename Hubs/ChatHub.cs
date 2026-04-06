@@ -72,7 +72,8 @@ public class ChatHub : Hub
 
             if (!stillConnected)
             {
-                var hubContext = _hubContext; // захватываем до Task
+                var hubContext = _hubContext;
+                var disconnectTime = DateTime.UtcNow; // запоминаем время отключения
 
                 _ = Task.Run(async () =>
                 {
@@ -90,9 +91,8 @@ public class ChatHub : Hub
                             .Where(u => u.Id == userId)
                             .ExecuteUpdateAsync(s => s
                                 .SetProperty(u => u.IsOnline, false)
-                                .SetProperty(u => u.LastSeen, DateTime.UtcNow));
+                                .SetProperty(u => u.LastSeen, disconnectTime)); // ← реальное время отключения
 
-                        // ✅ IHubContext работает вне контекста хаба
                         await hubContext.Clients.All.SendAsync("UserOffline", userId);
                     }
                     catch (Exception ex)
