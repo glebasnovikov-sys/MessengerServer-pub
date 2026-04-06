@@ -10,9 +10,7 @@ public class User
     [Required] public string PasswordHash { get; set; } = string.Empty;
     public string? Bio { get; set; }
     public string? AvatarColor { get; set; }
-    public string? FcmToken { get; set; }
     public DateTime LastSeen { get; set; } = DateTime.UtcNow;
-    // ✅ НОВОЕ
     public bool IsOnline { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
@@ -25,7 +23,6 @@ public class DeletedChat
     public DateTime DeletedAt { get; set; }
 }
 
-// Models.cs
 public class Message
 {
     public int Id { get; set; }
@@ -33,13 +30,12 @@ public class Message
     public int ReceiverId { get; set; }
     [Required] public string Text { get; set; } = string.Empty;
     public string? AudioUrl { get; set; }
-    public string? VideoUrl { get; set; }  // ← НОВОЕ
-    public string MessageType { get; set; } = "text"; // "text" | "audio" | "video"
+    public string? VideoUrl { get; set; }
+    public string MessageType { get; set; } = "text";
     public DateTime SentAt { get; set; } = DateTime.UtcNow;
     public bool IsRead { get; set; } = false;
 }
 
-// DTO — что отдаём клиенту (без PasswordHash)
 public class UserDto
 {
     public int Id { get; set; }
@@ -75,10 +71,4 @@ public class UpdateProfileRequest
     public int UserId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public string? Bio { get; set; }
-}
-
-public class FcmTokenRequest
-{
-    public int UserId { get; set; }
-    public string Token { get; set; } = string.Empty;
 }

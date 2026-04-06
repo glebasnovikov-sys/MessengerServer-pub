@@ -12,7 +12,6 @@ namespace MessengerServer.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly AppDbContext _db;
-
     public AuthController(AppDbContext db) => _db = db;
 
     [HttpGet("check-tag/{tag}")]
@@ -96,7 +95,6 @@ public class AuthController : ControllerBase
         var uploadsDir = Path.Combine(AppContext.BaseDirectory, "wwwroot", "avatars");
         Directory.CreateDirectory(uploadsDir);
 
-        // Удаляем старый файл
         if (!string.IsNullOrEmpty(user.AvatarColor))
         {
             var oldFileName = Path.GetFileName(user.AvatarColor.Split('?')[0]);
@@ -117,32 +115,11 @@ public class AuthController : ControllerBase
         return Ok(ToDto(user));
     }
 
-    [HttpPost("fcm-token")]
-    public async Task<IActionResult> SaveFcmToken([FromBody] FcmTokenRequest req)
-    {
-        Console.WriteLine($"[FCM-SERVER] Получен токен для userId={req.UserId}");
-        Console.WriteLine($"[FCM-SERVER] Токен: {req.Token?[..Math.Min(20, req.Token?.Length ?? 0)]}...");
-
-        var user = await _db.Users.FindAsync(req.UserId);
-        if (user == null)
-        {
-            Console.WriteLine($"[FCM-SERVER] ❌ Пользователь {req.UserId} не найден!");
-            return NotFound();
-        }
-
-        user.FcmToken = req.Token;
-        await _db.SaveChangesAsync();
-
-        Console.WriteLine($"[FCM-SERVER] ✅ Токен сохранён для {user.DisplayName} (id={user.Id})");
-        return Ok();
-    }
-
     [HttpGet("status/{userId}")]
     public async Task<IActionResult> GetStatus(int userId)
     {
         var user = await _db.Users.FindAsync(userId);
         if (user == null) return NotFound();
-
         return Ok(new
         {
             lastSeen = DateTime.SpecifyKind(user.LastSeen, DateTimeKind.Utc),
