@@ -20,14 +20,12 @@ public class MessagesController : ControllerBase
         _hub = hub;
     }
 
-    // ─── GET переписка с пагинацией ──────────────────────────────────────────
     [HttpGet("{userId}/{otherId}")]
     public async Task<IActionResult> GetConversation(
         int userId, int otherId,
         [FromQuery] int beforeId = 0,
         [FromQuery] int take = 30)
     {
-        // Проверяем дату удаления чата
         var deletedChat = await _db.DeletedChats
             .FirstOrDefaultAsync(d => d.UserId == userId && d.PeerId == otherId);
 
@@ -36,7 +34,6 @@ public class MessagesController : ControllerBase
                 (m.SenderId == userId && m.ReceiverId == otherId) ||
                 (m.SenderId == otherId && m.ReceiverId == userId));
 
-        // Скрываем сообщения до даты удаления
         if (deletedChat != null)
             query = query.Where(m => m.SentAt > deletedChat.DeletedAt);
 
@@ -71,9 +68,7 @@ public class MessagesController : ControllerBase
 
         return Ok(new { messages = msgs, hasMore });
     }
-  
 
-    // ─── Пометить прочитанными ───────────────────────────────────────────────
     [HttpPost("read/{userId}/{otherId}")]
     public async Task<IActionResult> MarkRead(int userId, int otherId)
     {
@@ -99,7 +94,6 @@ public class MessagesController : ControllerBase
         return Ok();
     }
 
-    // ─── Новые входящие после lastId ─────────────────────────────────────────
     [HttpGet("new/{userId}/{otherId}/{lastId}")]
     public async Task<IActionResult> GetNewIncoming(
         int userId, int otherId, int lastId)
@@ -114,11 +108,9 @@ public class MessagesController : ControllerBase
         return Ok(msgs);
     }
 
-    // ─── Список чатов ────────────────────────────────────────────────────────
     [HttpGet("chats/{userId}")]
     public async Task<IActionResult> GetChats(int userId)
     {
-        // Загружаем записи об удалённых чатах
         var deletedChats = await _db.DeletedChats
             .Where(d => d.UserId == userId)
             .ToDictionaryAsync(d => d.PeerId, d => d.DeletedAt);
@@ -138,7 +130,6 @@ public class MessagesController : ControllerBase
 
             if (!seen.Add(otherId)) continue;
 
-            // Скрываем чат если удалён и новых сообщений после удаления нет
             if (deletedChats.TryGetValue(otherId, out var deletedAt)
                 && msg.SentAt <= deletedAt)
                 continue;
@@ -169,7 +160,6 @@ public class MessagesController : ControllerBase
         return Ok(previews);
     }
 
-    // ─── Отправить текст ─────────────────────────────────────────────────────
     [HttpPost("send")]
     public async Task<IActionResult> Send([FromBody] SendMessageRequest req)
     {
@@ -188,18 +178,9 @@ public class MessagesController : ControllerBase
             .Group($"user_{req.ReceiverId}")
             .SendAsync("NewMessage", msg);
 
-        var receiver = await _db.Users.FindAsync(req.ReceiverId);
-        var sender = await _db.Users.FindAsync(req.SenderId);
-
-        if (receiver?.FcmToken != null && sender != null)
-            await SendPushAsync(receiver.FcmToken, sender.DisplayName, req.Text);
-        else
-            Console.WriteLine($"[FCM] Пропуск пуша: receiver.FcmToken={receiver?.FcmToken ?? "NULL"}");
-
         return Ok(msg);
     }
 
-    // ─── Отправить аудио ─────────────────────────────────────────────────────
     [HttpPost("audio")]
     public async Task<IActionResult> SendAudio(
         [FromForm] int senderId,
@@ -238,22 +219,12 @@ public class MessagesController : ControllerBase
             .Group($"user_{receiverId}")
             .SendAsync("NewMessage", msg);
 
-        var receiver = await _db.Users.FindAsync(receiverId);
-        var sender = await _db.Users.FindAsync(senderId);
-
-        if (receiver?.FcmToken != null && sender != null)
-            await SendPushAsync(receiver.FcmToken, sender.DisplayName, "🎤 Голосовое сообщение");
-        else
-            Console.WriteLine($"[FCM] Пропуск пуша: receiver.FcmToken={receiver?.FcmToken ?? "NULL"}");
-
         return Ok(msg);
     }
 
-    // ─── Удалить чат ─────────────────────────────────────────────────────────
     [HttpPost("delete/{userId}/{peerId}")]
     public async Task<IActionResult> DeleteChat(int userId, int peerId)
     {
-        // Удаляем старую запись если есть
         var existing = await _db.DeletedChats
             .FirstOrDefaultAsync(d => d.UserId == userId && d.PeerId == peerId);
 
@@ -271,7 +242,6 @@ public class MessagesController : ControllerBase
         return Ok();
     }
 
-    // ─── Отправить видео ─────────────────────────────────────────────────────
     [HttpPost("video")]
     public async Task<IActionResult> SendVideo(
         [FromForm] int senderId,
@@ -306,53 +276,6 @@ public class MessagesController : ControllerBase
             .Group($"user_{receiverId}")
             .SendAsync("NewMessage", msg);
 
-        var receiver = await _db.Users.FindAsync(receiverId);
-        var sender = await _db.Users.FindAsync(senderId);
-
-        if (receiver?.FcmToken != null && sender != null)
-            await SendPushAsync(receiver.FcmToken, sender.DisplayName, "📹 Видеосообщение");
-        else
-            Console.WriteLine($"[FCM] Пропуск пуша: receiver.FcmToken={receiver?.FcmToken ?? "NULL"}");
-
         return Ok(msg);
-    }
-
-    // ─── FCM ─────────────────────────────────────────────────────────────────
-    private static async Task SendPushAsync(
-        string fcmToken, string senderName, string messageText)
-    {
-        try
-        {
-            Console.WriteLine($"[FCM] Отправляем пуш → {senderName}: {messageText}");
-            Console.WriteLine($"[FCM] Токен: {fcmToken[..Math.Min(20, fcmToken.Length)]}...");
-
-            var message = new FirebaseAdmin.Messaging.Message
-            {
-                Token = fcmToken,
-                Notification = new FirebaseAdmin.Messaging.Notification
-                {
-                    Title = senderName,
-                    Body = messageText
-                },
-                Android = new FirebaseAdmin.Messaging.AndroidConfig
-                {
-                    Priority = FirebaseAdmin.Messaging.Priority.High,
-                    Notification = new FirebaseAdmin.Messaging.AndroidNotification
-                    {
-                        Sound = "default",
-                        ChannelId = "messages"
-                    }
-                }
-            };
-
-            var result = await FirebaseAdmin.Messaging.FirebaseMessaging
-                .DefaultInstance.SendAsync(message);
-
-            Console.WriteLine($"[FCM] ✅ Пуш отправлен успешно! MessageId: {result}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[FCM] ❌ Ошибка отправки: {ex.Message}");
-        }
     }
 }

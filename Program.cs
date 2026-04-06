@@ -1,18 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using MessengerServer.Data;
 using MessengerServer.Hubs;
-using FirebaseAdmin;
-using Google.Apis.Auth.OAuth2;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 
-// ✅ Строка подключения из переменной окружения Railway
 var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
     ?? builder.Configuration.GetConnectionString("Default");
 
-// Конвертируем postgres:// или postgresql:// в формат Npgsql
 if (connectionString != null &&
     (connectionString.StartsWith("postgres://") ||
      connectionString.StartsWith("postgresql://")))
@@ -33,36 +29,6 @@ builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
     p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
 var app = builder.Build();
-
-// ✅ Firebase из переменной окружения
-var firebaseJson = Environment.GetEnvironmentVariable("FIREBASE_KEY_JSON");
-if (!string.IsNullOrEmpty(firebaseJson))
-{
-    FirebaseApp.Create(new AppOptions
-    {
-        Credential = GoogleCredential.FromJson(firebaseJson)
-    });
-    Console.WriteLine("✅ Firebase инициализирован из переменной окружения");
-}
-else
-{
-    var firebaseKeyPath = Path.Combine(AppContext.BaseDirectory, "firebase-key.json");
-    if (!File.Exists(firebaseKeyPath))
-        firebaseKeyPath = Path.Combine(Directory.GetCurrentDirectory(), "firebase-key.json");
-
-    if (File.Exists(firebaseKeyPath))
-    {
-        FirebaseApp.Create(new AppOptions
-        {
-            Credential = GoogleCredential.FromFile(firebaseKeyPath)
-        });
-        Console.WriteLine("✅ Firebase инициализирован из файла");
-    }
-    else
-    {
-        Console.WriteLine("⚠️ Firebase не инициализирован");
-    }
-}
 
 using (var scope = app.Services.CreateScope())
 {
