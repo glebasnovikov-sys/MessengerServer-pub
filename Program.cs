@@ -19,7 +19,6 @@ if (connectionString != null &&
     var pass = Uri.UnescapeDataString(userInfo[1]);
     var db = uri.AbsolutePath.TrimStart('/');
     connectionString = $"Host={uri.Host};Port={uri.Port};Database={db};Username={user};Password={pass};SSL Mode=Require;Trust Server Certificate=true";
-    Console.WriteLine($"✅ Строка подключения сконвертирована для {uri.Host}");
 }
 
 builder.Services.AddDbContext<AppDbContext>(opt =>
