@@ -36,6 +36,46 @@ public class Message
     public bool IsRead { get; set; } = false;
 }
 
+// ─── ГРУППЫ ──────────────────────────────────────────────────────────────────
+
+public class Group
+{
+    public int Id { get; set; }
+    [Required] public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? AvatarColor { get; set; }
+    public int OwnerId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public List<GroupMember> Members { get; set; } = [];
+    public List<GroupMessage> Messages { get; set; } = [];
+}
+
+public class GroupMember
+{
+    public int Id { get; set; }
+    public int GroupId { get; set; }
+    public int UserId { get; set; }
+    public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
+    public Group? Group { get; set; }
+    public User? User { get; set; }
+}
+
+public class GroupMessage
+{
+    public int Id { get; set; }
+    public int GroupId { get; set; }
+    public int SenderId { get; set; }
+    [Required] public string Text { get; set; } = string.Empty;
+    public string? AudioUrl { get; set; }
+    public string? VideoUrl { get; set; }
+    public string MessageType { get; set; } = "text";
+    public DateTime SentAt { get; set; } = DateTime.UtcNow;
+    public Group? Group { get; set; }
+    public User? Sender { get; set; }
+}
+
+// ─── DTO ─────────────────────────────────────────────────────────────────────
+
 public class UserDto
 {
     public int Id { get; set; }
@@ -71,4 +111,45 @@ public class UpdateProfileRequest
     public int UserId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public string? Bio { get; set; }
+}
+
+public class CreateGroupRequest
+{
+    public int OwnerId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public List<int> MemberIds { get; set; } = [];
+}
+
+public class SendGroupMessageRequest
+{
+    public int SenderId { get; set; }
+    public int GroupId { get; set; }
+    public string Text { get; set; } = string.Empty;
+}
+
+public class GroupMessageDto
+{
+    public int Id { get; set; }
+    public int GroupId { get; set; }
+    public int SenderId { get; set; }
+    public string SenderName { get; set; } = string.Empty;
+    public string? SenderAvatar { get; set; }
+    public string Text { get; set; } = string.Empty;
+    public string? AudioUrl { get; set; }
+    public string? VideoUrl { get; set; }
+    public string MessageType { get; set; } = "text";
+    public DateTime SentAt { get; set; }
+}
+
+public class GroupDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? AvatarColor { get; set; }
+    public int OwnerId { get; set; }
+    public int MemberCount { get; set; }
+    public int OnlineCount { get; set; }
+    public List<UserDto> Members { get; set; } = [];
 }

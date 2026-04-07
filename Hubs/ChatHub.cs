@@ -34,9 +34,24 @@ public class ChatHub : Hub
             await _db.SaveChangesAsync();
         }
 
+        // Вступаем в SignalR-группы всех групп пользователя
+        var groupIds = await _db.GroupMembers
+            .Where(gm => gm.UserId == userId)
+            .Select(gm => gm.GroupId)
+            .ToListAsync();
+
+        foreach (var gid in groupIds)
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"group_{gid}");
+
         var count = _connections.Values.Count(v => v == userId);
         if (count == 1)
             await Clients.Others.SendAsync("UserOnline", userId);
+    }
+
+    // Вступить в SignalR-группу (вызывается клиентом при открытии группового чата)
+    public async Task JoinGroup(int groupId)
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"group_{groupId}");
     }
 
     public async Task StartTyping(int toUserId)
@@ -53,6 +68,22 @@ public class ChatHub : Hub
             return;
         await Clients.Group($"user_{toUserId}")
             .SendAsync("UserStoppedTyping", fromUserId);
+    }
+
+    public async Task StartTypingInGroup(int groupId)
+    {
+        if (!_connections.TryGetValue(Context.ConnectionId, out var fromUserId))
+            return;
+        await Clients.OthersInGroup($"group_{groupId}")
+            .SendAsync("GroupUserTyping", groupId, fromUserId);
+    }
+
+    public async Task StopTypingInGroup(int groupId)
+    {
+        if (!_connections.TryGetValue(Context.ConnectionId, out var fromUserId))
+            return;
+        await Clients.OthersInGroup($"group_{groupId}")
+            .SendAsync("GroupUserStoppedTyping", groupId, fromUserId);
     }
 
     public async Task Ping(int userId)
@@ -73,7 +104,7 @@ public class ChatHub : Hub
             if (!stillConnected)
             {
                 var hubContext = _hubContext;
-                var disconnectTime = DateTime.UtcNow; // запоминаем время отключения
+                var disconnectTime = DateTime.UtcNow;
 
                 _ = Task.Run(async () =>
                 {
@@ -91,7 +122,7 @@ public class ChatHub : Hub
                             .Where(u => u.Id == userId)
                             .ExecuteUpdateAsync(s => s
                                 .SetProperty(u => u.IsOnline, false)
-                                .SetProperty(u => u.LastSeen, disconnectTime)); // ← реальное время отключения
+                                .SetProperty(u => u.LastSeen, disconnectTime));
 
                         await hubContext.Clients.All.SendAsync("UserOffline", userId);
                     }
