@@ -44,7 +44,7 @@ public class Group
     [Required] public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? AvatarColor { get; set; }
-    public string? AvatarUrl { get; set; }  // ← ДОБАВЛЕНО
+    public string? AvatarUrl { get; set; }
     public int OwnerId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public List<GroupMember> Members { get; set; } = [];
@@ -75,8 +75,8 @@ public class GroupMessage
     public User? Sender { get; set; }
 }
 
-// ��── ТАБЛИЦА ДЛЯ ПРОЧТЕНИЯ СООБЩЕНИЙ В ГРУППАХ ─────────────────────────────
-// ← ДОБАВЛЕНО
+// ─── ТАБЛИЦА ДЛЯ ПРОЧТЕНИЯ СООБЩЕНИЙ В ГРУППАХ ──────────────────────────────
+
 public class GroupMessageRead
 {
     public int Id { get; set; }
@@ -151,7 +151,7 @@ public class GroupMessageDto
     public string? VideoUrl { get; set; }
     public string MessageType { get; set; } = "text";
     public DateTime SentAt { get; set; }
-    public int ReadCount { get; set; }  // ← ДОБАВЛЕНО
+    public int ReadCount { get; set; }
 }
 
 public class GroupDto
@@ -160,9 +160,13 @@ public class GroupDto
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? AvatarColor { get; set; }
-    public string? AvatarUrl { get; set; }  // ← ДОБАВЛЕНО
+    public string? AvatarUrl { get; set; }
     public int OwnerId { get; set; }
     public int MemberCount { get; set; }
     public int OnlineCount { get; set; }
     public List<UserDto> Members { get; set; } = [];
+
+    // ── Последнее сообщение — для отображения в списке чатов ─────────────────
+    public string? LastMessageText { get; set; }
+    public DateTime LastMessageAt { get; set; }
 }

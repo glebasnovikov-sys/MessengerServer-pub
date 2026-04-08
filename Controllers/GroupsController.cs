@@ -35,7 +35,7 @@ public class GroupsController : ControllerBase
         _db.Groups.Add(group);
         await _db.SaveChangesAsync();
 
-        // Добавляем создателя
+        // Добавляем создателя если его нет в списке
         var allIds = req.MemberIds.Contains(req.OwnerId)
             ? req.MemberIds
             : req.MemberIds.Append(req.OwnerId).ToList();
@@ -88,6 +88,48 @@ public class GroupsController : ControllerBase
         var dto = await ToDto(groupId);
         if (dto == null) return NotFound();
         return Ok(dto);
+    }
+
+    // Удалить группу (только создатель)
+    [HttpDelete("{groupId}")]
+    public async Task<IActionResult> DeleteGroup(int groupId, [FromQuery] int userId)
+    {
+        var group = await _db.Groups.FindAsync(groupId);
+        if (group == null) return NotFound();
+
+        // Только создатель может удалить группу
+        if (group.OwnerId != userId) return Forbid();
+
+        // Получаем всех участников ДО удаления — чтобы уведомить их потом
+        var memberIds = await _db.GroupMembers
+            .Where(gm => gm.GroupId == groupId)
+            .Select(gm => gm.UserId)
+            .ToListAsync();
+
+        // Удаляем все сообщения группы
+        await _db.GroupMessages
+            .Where(m => m.GroupId == groupId)
+            .ExecuteDeleteAsync();
+
+        // Удаляем всех участников группы
+        await _db.GroupMembers
+            .Where(gm => gm.GroupId == groupId)
+            .ExecuteDeleteAsync();
+
+        // Удаляем саму группу
+        _db.Groups.Remove(group);
+        await _db.SaveChangesAsync();
+
+        // Уведомляем ВСЕХ бывших участников — группа удалена
+        // Каждый клиент сам уберёт её из своего списка чатов
+        foreach (var uid in memberIds)
+        {
+            await _hub.Clients
+                .Group($"user_{uid}")
+                .SendAsync("GroupDeleted", groupId);
+        }
+
+        return Ok();
     }
 
     // Получить сообщения группы (с пагинацией)
@@ -343,6 +385,7 @@ public class GroupsController : ControllerBase
     }
 
     // ─── HELPERS ─────────────────────────────────────────────────────────────
+
     private async Task<GroupDto?> ToDto(int groupId)
     {
         var group = await _db.Groups
@@ -357,12 +400,27 @@ public class GroupsController : ControllerBase
             gm.User.IsOnline &&
             DateTime.UtcNow - gm.User.LastSeen < TimeSpan.FromSeconds(60));
 
+        // Получаем последнее сообщение группы для отображения в списке чатов
+        var lastMsg = await _db.GroupMessages
+            .Where(m => m.GroupId == groupId)
+            .OrderByDescending(m => m.Id)
+            .FirstOrDefaultAsync();
+
+        // Формируем текст последнего сообщения
+        string? lastText = lastMsg?.MessageType switch
+        {
+            "audio" => "__audio__",
+            "video" => "__video__",
+            _ => lastMsg?.Text
+        };
+
         return new GroupDto
         {
             Id = group.Id,
             Name = group.Name,
             Description = group.Description,
             AvatarColor = group.AvatarColor,
+            AvatarUrl = group.AvatarUrl,
             OwnerId = group.OwnerId,
             MemberCount = group.Members.Count,
             OnlineCount = onlineCount,
@@ -372,7 +430,10 @@ public class GroupsController : ControllerBase
                 Tag = gm.User.Tag,
                 DisplayName = gm.User.DisplayName,
                 AvatarColor = gm.User.AvatarColor
-            }).ToList()
+            }).ToList(),
+            // ── Последнее сообщение ───────────────────────────────────────────
+            LastMessageText = lastText,
+            LastMessageAt = lastMsg?.SentAt ?? group.CreatedAt
         };
     }
 
