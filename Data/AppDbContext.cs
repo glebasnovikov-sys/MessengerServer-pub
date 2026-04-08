@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<Group> Groups => Set<Group>();
     public DbSet<GroupMember> GroupMembers => Set<GroupMember>();
     public DbSet<GroupMessage> GroupMessages => Set<GroupMessage>();
+    public DbSet<GroupMessageRead> GroupMessageReads => Set<GroupMessageRead>();  // ← ДОБАВЛЕНО
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -42,5 +43,10 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(gm => gm.SenderId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // ← ДОБАВЛЕНО: конфигурация для GroupMessageRead
+        modelBuilder.Entity<GroupMessageRead>()
+            .HasIndex(gmr => new { gmr.GroupMessageId, gmr.UserId })
+            .IsUnique(); // Один пользователь может прочитать сообщение только один раз
     }
 }

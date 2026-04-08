@@ -43,7 +43,7 @@ Directory.CreateDirectory(Path.Combine(wwwroot, "video"));
 app.UseCors();
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(wwwroot),
+    FileProvider = new Microsзoft.Extensions.FileProviders.PhysicalFileProvider(wwwroot),
     RequestPath = ""
 });
 
